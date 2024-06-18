@@ -22,11 +22,7 @@ const dataStore = Vue.reactive({
 
 const silenceStore = Vue.reactive({
     state: {
-        show: false,
         labels: {}
-    },
-    showForm() {
-        this.state.show = true;
     },
     setLabels(labels) {
         this.state.labels = { ...labels };
@@ -67,16 +63,14 @@ const app = Vue.createApp({
         },
         setSilenceLabels(labels) {
             silenceStore.setLabels(labels);
-            silenceStore.showForm();
-            scroll(0, 0);
+            this.showModal('silenceModal');
         },
         setSilenceDataset(event) {
             this.setSilenceLabels(event.target.dataset);
         },
         addSilenceLabel(label, value) {
             silenceStore.addLabel(label, value);
-            silenceStore.showForm();
-            scroll(0, 0);
+            this.showModal('silenceModal');
         },
         silenceSelectedHosts(event) {
             this.setSilenceLabels(event.target.dataset);
@@ -116,7 +110,13 @@ const app = Vue.createApp({
             // and set the target list
             let tgt = document.getElementById(target);
             tgt.setAttribute('list', dst + '.' + src);
-        }
+        },
+        showModal: function (modalId) {
+            var modal = $('#' + modalId);
+            if (modal.length) {
+                modal.modal('show');
+            }
+        },
     },
     computed: {
         activeServiceAlerts: function () {
@@ -149,26 +149,43 @@ const app = Vue.createApp({
 
 app.config.compilerOptions.whitespace = "preserve";
 
-app.component('silence-form', {
-    template: '#silence-form-template',
+app.component('silence-modal', {
+    template: '#silence-modal-template',
     delimiters: ['[[', ']]'],
     data: () => ({
         state: silenceStore.state,
         form: {}
     }),
+    computed: {
+        globalMessages() {
+            return globalStore.state.messages;
+        },
+    },
     methods: {
+        addLabel() {
+            if (this.form.label && this.form.value) {
+                silenceStore.addLabel(this.form.label, this.form.value);
+                this.form.label = '';
+                this.form.value = '';
+            }
+        },
         removeLabel(label) {
             delete this.state.labels[label];
         },
         submit() {
             const body = JSON.stringify({
                 labels: this.state.labels,
-                ...this.form
+                startsAt: this.form.startsAt,
+                endsAt: this.form.endsAt,
+                duration: this.form.duration,
+                createdBy: this.form.createdBy,
+                comment: this.form.comment
             });
 
             fetch('/proxy/v1/silences', { method: 'POST', body })
                 .then(response => {
                     if (response.ok) {
+                        this.hideModal('silenceModal');
                         location.reload();
                     } else {
                         return response.json();
@@ -180,7 +197,16 @@ app.component('silence-form', {
                     }
                 });
         },
-    }
+        hideModal: function (modalId) {
+            var modal = $('#' + modalId);
+            if (modal.length) {
+                globalStore.setMessages([]);
+                this.form = {};
+                this.state = silenceStore.state;
+                modal.modal('hide');
+            }
+        },
+    },
 });
 
 app.component("promql-query", {
